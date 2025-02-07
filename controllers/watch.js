@@ -1,62 +1,59 @@
-var async = require('async');
-var Watch = require('../models/Watch');
-var Category = require('../models/Category');
-var Reference = require('../models/Reference');
-var mongoose = require('mongoose');
-var nodemailer = require('nodemailer');
-const bodyParser = require('body-parser');
-
+var async = require("async");
+var Watch = require("../models/Watch");
+var Category = require("../models/Category");
+var Reference = require("../models/Reference");
+var mongoose = require("mongoose");
+var nodemailer = require("nodemailer");
+const bodyParser = require("body-parser");
 
 // Get Movie or Series
-exports.watchGet = function(req, res){
-  Watch.findOne({ 'permalink': req.params.permalink }, function(err, w){
-
-    if( req.params.ep_number ){
+exports.watchGet = function (req, res) {
+  Watch.findOne({ permalink: req.params.permalink }, function (err, w) {
+    if (req.params.ep_number) {
       ep_number = req.params.ep_number - 1;
-    }
-    else {
+    } else {
       ep_number = 0;
     }
 
     var isMobile = false;
     var isDesktop = false;
     // to test if desktop
-    if (req.device.type == 'phone') {
-      isMobile = true
-    }
-    else if (req.device.type == 'desktop' && w.layout != "serie") {
+    if (req.device.type == "phone") {
+      isMobile = true;
+    } else if (req.device.type == "desktop" && w.layout != "serie") {
       // var isDesktop = true
-      isMobile = true
+      isMobile = true;
+    } else {
+      isMobile = true;
     }
-    else{
-      isMobile = true
-    }
 
-
-    if(typeof req.headers.referer !== 'undefined'){
-      if( (req.headers.referer.match(/^https?:\/\/([^\/]+\.)?libreflix\.org(\/|$)/i)) ||
-         (req.headers.referer.match(/^https?:\/\/([^\/]+\.)?localhost:3998(\/|$)/i)) )
-      {
-
+    if (typeof req.headers.referer !== "undefined") {
+      if (
+        req.headers.referer.match(
+          /^https?:\/\/([^\/]+\.)?libreflix\.org(\/|$)/i
+        ) ||
+        req.headers.referer.match(
+          /^https?:\/\/([^\/]+\.)?localhost:3998(\/|$)/i
+        )
+      ) {
       } else {
-        return res.redirect('/i/'+ w.permalink);
+        return res.redirect("/i/" + w.permalink);
       }
     } else {
-     return res.redirect('/i/'+ w.permalink);
+      return res.redirect("/i/" + w.permalink);
     }
 
     if (w.useWatchV2) {
-      res.render('watchv2', {
+      res.render("watchv2", {
         title: w.title,
         isMobile: isMobile,
         isDesktop: isDesktop,
         w_eps: w.eps[ep_number],
         next_episode: ep_number + 2,
-        w: w
-      })
-    }
-    else{
-      res.render('watch', {
+        w: w,
+      });
+    } else {
+      res.render("watch", {
         w: w,
         title: w.title,
         layout: w.layout,
@@ -68,52 +65,57 @@ exports.watchGet = function(req, res){
         thumb480: w.thumb480,
         thumb130: w.thumb130,
         runtime: w.runtime,
-        eps: w.eps
-      })
+        eps: w.eps,
+      });
     }
   });
 };
 
-
 // GET New Production
 
-exports.newWatchGet = function(req, res) {
+exports.newWatchGet = function (req, res) {
   if (!req.user) {
-    return res.redirect('/login');
+    return res.redirect("/login");
   }
-  res.render('novo', {
-    title: 'Criar Nova Produção'
+  res.render("novo", {
+    title: "Criar Nova Produção",
   });
 };
 
 // POST New Production
-exports.newWatchPost = function(req, res, next) {
-
-
-var body = req.body;
+exports.newWatchPost = function (req, res, next) {
+  var body = req.body;
 
   // para retornar depois do erro
-  var form = {
-  };
+  var form = {};
+
+  if ((body.year === undefined) | (body.year === null))
+    throw new Error("ANO OBRIGATORIO!");
+
+  if (typeof body.year !== "number" || isNaN(body.year)) {
+    throw new Error("ANO DEVE SER NUMERO VALIDO");
+  }
 
   var errors = req.validationErrors();
 
   if (errors) {
-    req.flash('error', errors);
-    return res.render('novo', {form: form});
+    req.flash("error", errors);
+    return res.render("novo", { form: form });
   }
 
-  Watch.findOne({ permalink: req.body.permalink }, function(err, watch) {
-    	if (watch) {
-      	req.flash('error', { msg: 'O permalink inserido já existe. Tente outro.' });
-      	return res.redirect('/novo');
-    	}
-      // Para salvar no BD
-   	watch = new Watch({
+  Watch.findOne({ permalink: req.body.permalink }, function (err, watch) {
+    if (watch) {
+      req.flash("error", {
+        msg: "O permalink inserido já existe. Tente outro.",
+      });
+      return res.redirect("/novo");
+    }
+    // Para salvar no BD
+    watch = new Watch({
       criador: req.user.id,
       permalink: req.body.permalink,
-      layout: 'filme',
-      featured : false,
+      layout: "filme",
+      featured: false,
       title: req.body.title,
       subtitle: req.body.subtitle,
       sinopse: req.body.sinopse,
@@ -124,70 +126,73 @@ var body = req.body;
       thumb480: req.body.thumb480,
       imgbg: req.body.imgbg,
       tags: req.body.tags,
-      status: "pending"
+      status: "pending",
     });
-    watch.save(function(err) {
+    watch.save(function (err) {
       //req.logIn(campanha, function(err) {
-        req.flash('success', { msg: 'Muito obrigado por sua colaboração. Em breve a produção estará no ar. <3' });
-        res.redirect('/');
+      req.flash("success", {
+        msg: "Muito obrigado por sua colaboração. Em breve a produção estará no ar. <3",
+      });
+      res.redirect("/");
       //});
     });
   });
-
 };
-
 
 // GET Tags
-exports.tagsGet = function(req, res){
-  Watch.find({ 'tags': req.params.tags }, null, {sort: '-year'}, function(err, w){
-
-    if (!w) {
-      return res.redirect('/404');
-    }
-    else{
-      res.render('home', {
-        title: 'Tag',
-        tag: req.params.tags,
-        watch: w
-      });
-    }
-  });
-};
-
-
-//Get Edit Watch
-exports.watchEdit = function(req, res){
-  Category.find({}, null, {sort: 'title'},function(err, categories){
-    Watch.findOne({ '_id': req.params._id }, function(err, w){
-    Reference.find({ 'attachedToWatch': req.params._id }, function(err, reference) {
-
+exports.tagsGet = function (req, res) {
+  Watch.find(
+    { tags: req.params.tags },
+    null,
+    { sort: "-year" },
+    function (err, w) {
       if (!w) {
-        return res.redirect('/404');
-      }
-      else{
-        res.render('edit', {
-          categories: categories,
-          reference: reference,
-          w: w
+        return res.redirect("/404");
+      } else {
+        res.render("home", {
+          title: "Tag",
+          tag: req.params.tags,
+          watch: w,
         });
       }
-    });
-    }).populate('modComments.moderator').populate('criador');
+    }
+  );
+};
+
+//Get Edit Watch
+exports.watchEdit = function (req, res) {
+  Category.find({}, null, { sort: "title" }, function (err, categories) {
+    Watch.findOne({ _id: req.params._id }, function (err, w) {
+      Reference.find(
+        { attachedToWatch: req.params._id },
+        function (err, reference) {
+          if (!w) {
+            return res.redirect("/404");
+          } else {
+            res.render("edit", {
+              categories: categories,
+              reference: reference,
+              w: w,
+            });
+          }
+        }
+      );
+    })
+      .populate("modComments.moderator")
+      .populate("criador");
   });
 };
 
-
-
 // PUT or Update a Production
-exports.watchPut = function(req, res, next) {
-var body = req.body;
-  Watch.findById(req.params._id, function(err, watch) {
+exports.watchPut = function (req, res, next) {
+  var body = req.body;
+  Watch.findById(req.params._id, function (err, watch) {
     /* Para salvar no BD */
 
     /* Internal */
     watch.permalink = req.body.permalink;
     watch.layout = req.body.layout;
-    watch.featured  = req.body.featured;
+    watch.featured = req.body.featured;
     if (req.user.adm) {
       watch.criador = req.body.criador;
       watch.top = req.body.top;
@@ -246,7 +251,7 @@ var body = req.body;
     /* Categories */
     watch.tags = req.body.tags;
     watch.format = req.body.format;
-    watch.categories = req.body['categories[]'];
+    watch.categories = req.body["categories[]"];
 
     /* External Links */
     watch.links.website = req.body.website;
@@ -260,7 +265,6 @@ var body = req.body;
     watch.links.facebook = req.body.facebook;
     watch.links.instagram = req.body.instagram;
 
-
     /* ModComments */
     watch.modComments.moderator = req.user.id;
     if (req.user.mod == true || req.user.adm == true) {
@@ -271,64 +275,65 @@ var body = req.body;
 
     if (req.body.modComments_status_old != req.body.modComments_status) {
       async.waterfall([
-        function() {
+        function () {
           var transporter = nodemailer.createTransport({
-            service: 'Mailgun',
+            service: "Mailgun",
             auth: {
               user: process.env.MAILGUN_USERNAME,
-              pass: process.env.MAILGUN_PASSWORD
-            }
+              pass: process.env.MAILGUN_PASSWORD,
+            },
           });
           var mailOptions = {
             to: req.body.criador_email,
-            from: 'libreflix@protonmail.com',
-            subject: 'Alteração de status de obra no Libreflix',
-            html: 'Olá, amigx criador!' +
-            '<br>O status da sua obra <b>' + req.body.title + '</b> foi alterado no Libreflix.' +
-            '<br><br>Status anterior: ' + req.body.modComments_status_old +
-            '<br>Status atual: ' + req.body.modComments_status +
-            '<br><br>Comentário de um Librerian:<br> <pre>' + req.body.modComments_comment + '</pre>' +
-            '<br><br>Muito obrigado por criar o Libreflix junto com a gente.' +
-            '<br><br>Abraços Libres! <3<br>Time Libreflix<br><a href="https://libreflix.org"><img src="https://libreflix.org/libreflix.png" width="100"></a>'
+            from: "libreflix@protonmail.com",
+            subject: "Alteração de status de obra no Libreflix",
+            html:
+              "Olá, amigx criador!" +
+              "<br>O status da sua obra <b>" +
+              req.body.title +
+              "</b> foi alterado no Libreflix." +
+              "<br><br>Status anterior: " +
+              req.body.modComments_status_old +
+              "<br>Status atual: " +
+              req.body.modComments_status +
+              "<br><br>Comentário de um Librerian:<br> <pre>" +
+              req.body.modComments_comment +
+              "</pre>" +
+              "<br><br>Muito obrigado por criar o Libreflix junto com a gente." +
+              '<br><br>Abraços Libres! <3<br>Time Libreflix<br><a href="https://libreflix.org"><img src="https://libreflix.org/libreflix.png" width="100"></a>',
           };
-          transporter.sendMail(mailOptions, function(err) {});
-          }
+          transporter.sendMail(mailOptions, function (err) {});
+        },
       ]);
     }
-    watch.save(function(err) {
-      req.flash('success', { msg: 'Alterações feitas com sucesso.' });
-      res.redirect('/edit/' + req.params._id);
+    watch.save(function (err) {
+      req.flash("success", { msg: "Alterações feitas com sucesso." });
+      res.redirect("/edit/" + req.params._id);
     });
-
-
-    });
+  });
 };
 
-exports.newReference = function(req, res, next) {
-
-  if (req.xhr || req.accepts('json,html') === 'json') {
-    console.log('OI');
+exports.newReference = function (req, res, next) {
+  if (req.xhr || req.accepts("json,html") === "json") {
+    console.log("OI");
     console.log(req.body.u);
     console.log(req.body.ref_url);
     console.log(req.body.ref_title);
 
     if (req.body.ref_url && req.body.ref_title) {
-      Watch.findOne({ 'permalink': req.params.permalink }, function(err, watch){
-
-           	reference = new Reference({
-              attachedToWatch: watch.id,
-              creator: req.body.u,
-              url: req.body.ref_url,
-              title: req.body.ref_title
-            });
-            reference.save(function(err) {
-                res.send({success: true})
-            });
-        })
+      Watch.findOne({ permalink: req.params.permalink }, function (err, watch) {
+        reference = new Reference({
+          attachedToWatch: watch.id,
+          creator: req.body.u,
+          url: req.body.ref_url,
+          title: req.body.ref_title,
+        });
+        reference.save(function (err) {
+          res.send({ success: true });
+        });
+      });
     } else {
-      res.send({success: false})
+      res.send({ success: false });
     }
-
-
   }
-}
+};
